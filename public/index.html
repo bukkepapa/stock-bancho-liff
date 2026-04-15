@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ストック番長">
+  <meta name="theme-color" content="#2563EB">
+  <title>ストック番長</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+  <!-- LIFF SDK -->
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body>
+
+  <!-- Toast通知 -->
+  <div id="toast" class="toast" role="alert" aria-live="polite"></div>
+
+  <!-- ローディング画面 -->
+  <div id="loading-screen" class="loading-screen hidden">
+    <div class="loading-content">
+      <div class="loading-logo">🏪</div>
+      <p class="loading-app-name">ストック番長</p>
+      <div class="loading-spinner"></div>
+      <p class="loading-text">LINEと連携中...</p>
+    </div>
+  </div>
+
+  <!-- アプリ本体 -->
+  <div id="app-wrapper" class="app-wrapper hidden">
+
+    <!-- ===== 画面①：ホーム ===== -->
+    <div id="screen-home" class="screen active">
+      <header class="header">
+        <div class="header-top">
+          <h1 class="app-title">🏪 ストック番長</h1>
+          <span id="shopping-day-badge" class="badge"></span>
+        </div>
+        <p id="user-display" class="user-display" style="display:none"></p>
+      </header>
+      <main class="screen-content">
+        <div id="alert-banner" class="alert-banner hidden" role="alert"></div>
+        <div id="cards-container" class="cards-container"></div>
+        <p id="last-updated" class="last-updated"></p>
+        <button class="btn btn-primary btn-large" onclick="showScreen('update')">
+          📝 在庫を更新する
+        </button>
+      </main>
+    </div>
+
+    <!-- ===== 画面②：在庫更新 ===== -->
+    <div id="screen-update" class="screen">
+      <header class="header">
+        <button class="btn-back" onclick="showScreen('home')" aria-label="戻る">
+          &#8592; ホームに戻る
+        </button>
+        <h1 class="header-title">在庫を更新</h1>
+      </header>
+      <main class="screen-content">
+        <div id="update-items-container"></div>
+        <div id="update-memo-container"></div>
+        <button class="btn btn-primary btn-large" onclick="handleSave()">
+          💾 保存する
+        </button>
+      </main>
+    </div>
+
+    <!-- ===== 画面③：購入履歴 ===== -->
+    <div id="screen-history" class="screen">
+      <header class="header">
+        <h1 class="header-title">📋 購入履歴</h1>
+      </header>
+      <main class="screen-content">
+        <div id="weekly-summary-container"></div>
+        <div id="history-list-container"></div>
+      </main>
+    </div>
+
+    <!-- ===== 画面④：設定 ===== -->
+    <div id="screen-settings" class="screen">
+      <header class="header">
+        <h1 class="header-title">⚙️ 設定</h1>
+      </header>
+      <main class="screen-content" id="settings-content"></main>
+    </div>
+
+  </div><!-- /app-wrapper -->
+
+  <!-- ===== 買い物サジェストモーダル ===== -->
+  <div id="modal-suggestion" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-backdrop" onclick="closeSuggestion()"></div>
+    <div class="modal-content">
+      <h2 id="suggestion-title" class="modal-title">🛒 今日の買い物リスト</h2>
+      <p id="suggestion-subtitle" class="modal-subtitle"></p>
+      <div id="suggestion-items-container" class="suggestion-items"></div>
+      <div class="modal-buttons">
+        <button class="btn btn-line" onclick="sendSuggestionToLINE()">
+          <span class="line-icon">LINE</span> LINEに送る
+        </button>
+        <button class="btn btn-secondary" onclick="closeSuggestion()">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 品目追加・編集モーダル ===== -->
+  <div id="modal-item-form" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-backdrop" onclick="closeItemForm()"></div>
+    <div class="modal-content modal-content-tall">
+      <h2 id="item-form-title" class="modal-title">品目を追加</h2>
+      <div class="item-form">
+
+        <div class="form-row">
+          <label class="form-label" for="form-emoji">絵文字</label>
+          <input id="form-emoji" type="text" class="form-input form-input-emoji"
+                 maxlength="2" placeholder="🥚">
+        </div>
+
+        <div class="form-row">
+          <label class="form-label" for="form-name">
+            品目名 <span class="form-required">*</span>
+          </label>
+          <input id="form-name" type="text" class="form-input" placeholder="例：卵">
+        </div>
+
+        <div class="form-row">
+          <label class="form-label" for="form-unit">
+            在庫の単位 <span class="form-required">*</span>
+          </label>
+          <input id="form-unit" type="text" class="form-input"
+                 placeholder="例：個・本・袋・パック"
+                 oninput="updateFormUnitLabels()">
+        </div>
+
+        <div class="form-row">
+          <label class="form-label" for="form-daily">
+            1日の消費量 <span class="form-required">*</span>
+          </label>
+          <div class="form-input-row">
+            <input id="form-daily" type="number" class="form-input form-input-num"
+                   step="0.01" min="0.01" placeholder="4">
+            <span class="form-unit-label" id="form-unit-label1">単位/日</span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label" for="form-purchase-amount">
+            1回の購入量 <span class="form-required">*</span>
+          </label>
+          <div class="form-input-row">
+            <input id="form-purchase-amount" type="number" class="form-input form-input-num"
+                   step="1" min="1" placeholder="10">
+            <span class="form-unit-label" id="form-unit-label2">単位</span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label" for="form-purchase-unit-name">購入時の呼び名</label>
+          <input id="form-purchase-unit-name" type="text" class="form-input"
+                 placeholder="例：ケース・スリーブ（省略可）">
+        </div>
+
+        <div class="form-row form-row-toggle">
+          <label class="form-label" for="form-decimal">小数点入力（0.1刻み）</label>
+          <label class="toggle-switch">
+            <input id="form-decimal" type="checkbox">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+      </div>
+      <div class="modal-buttons">
+        <button class="btn btn-primary" onclick="saveItemForm()" style="flex:1">
+          ✅ 保存する
+        </button>
+        <button class="btn btn-secondary" onclick="closeItemForm()">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ボトムナビ ===== -->
+  <nav class="bottom-nav hidden" role="navigation" aria-label="メインナビゲーション">
+    <button class="nav-btn active" data-screen="home" onclick="showScreen('home')">
+      <span class="nav-icon">🏠</span>
+      <span class="nav-label">ホーム</span>
+    </button>
+    <button class="nav-btn" data-screen="update" onclick="showScreen('update')">
+      <span class="nav-icon">📝</span>
+      <span class="nav-label">更新</span>
+    </button>
+    <button class="nav-btn" data-screen="history" onclick="showScreen('history')">
+      <span class="nav-icon">📋</span>
+      <span class="nav-label">履歴</span>
+    </button>
+    <button class="nav-btn" data-screen="settings" onclick="showScreen('settings')">
+      <span class="nav-icon">⚙️</span>
+      <span class="nav-label">設定</span>
+    </button>
+  </nav>
+
+  <script src="app.js"></script>
+</body>
+</html>

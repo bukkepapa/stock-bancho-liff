@@ -1,0 +1,9 @@
+{
+  "name": "stock-bancho-liff",
+  "version": "1.0.0",
+  "description": "ストック番長 LIFF版 — 食材在庫管理アプリ",
+  "private": true,
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0"
+  }
+}
