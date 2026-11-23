@@ -6,10 +6,5 @@
     { "src": "/privacy",  "dest": "/privacy.html" },
     { "src": "/(.*)",     "dest": "/$1"     }
   ],
-  "crons": [
-    {
-      "path": "/api/notify",
-      "schedule": "0 11 * * *"
-    }
-  ]
+  "crons": []
 }
